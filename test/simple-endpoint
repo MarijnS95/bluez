@@ -31,6 +31,23 @@ SBC_CAPABILITIES = dbus.Array([dbus.Byte(0xff), dbus.Byte(0xff), dbus.Byte(2), d
 # JointStereo 44.1Khz Subbands: Blocks: 16 Bitpool Range: 2-32
 SBC_CONFIGURATION = dbus.Array([dbus.Byte(0x21), dbus.Byte(0x15), dbus.Byte(2), dbus.Byte(32)])
 
+# Should be 0xFF for vendor codecs
+LDAC_CODEC = dbus.Byte(0xff)
+# Frequencies: 44.1 KHZ | 48 KHz | 88.2 KHz | 96 KHz
+# Channels: Mono | Dual | Stereo
+LDAC_CAPABILITIES = dbus.Array([dbus.Byte(0x2d), dbus.Byte(0x01),
+  dbus.Byte(0x00), dbus.Byte(0x00), dbus.Byte(0xaa), dbus.Byte(0x00),
+  dbus.Byte(0x3c), dbus.Byte(0x07)])
+LDAC_CONFIGURATION = dbus.Array([dbus.Byte(0x2d), dbus.Byte(0x01),
+  dbus.Byte(0x00), dbus.Byte(0x00), dbus.Byte(0xaa), dbus.Byte(0x00),
+  # 44.1 KHz, Stereo; 0x20 0x01
+  # 48 KHz,   Stereo; 0x10 0x01
+  # 48 KHz,   Dual  ; 0x10 0x02
+  # 48 KHz,   Mono  ; 0x10 0x04
+  # 88.2 KHz, Stereo; 0x08 0x01
+  # 96 KHz,   Stereo; 0x04 0x01
+  dbus.Byte(0x20), dbus.Byte(0x01)])
+
 MP3_CODEC = dbus.Byte(0x01)
 #Channel Modes: Mono DualChannel Stereo JointStereo
 #Frequencies: 32Khz 44.1Khz 48Khz
@@ -118,6 +135,18 @@ if __name__ == '__main__':
 							"Codec" : SBC_CODEC,
 							"DelayReporting" : True,
 							"Capabilities" : SBC_CAPABILITIES })
+		if sys.argv[2] == "ldacsink":
+			properties = dbus.Dictionary({ "UUID" : A2DP_SINK_UUID,
+							"Codec" : LDAC_CODEC,
+							"DelayReporting" : True,
+							"Capabilities" : LDAC_CAPABILITIES })
+			endpoint.default_configuration(LDAC_CONFIGURATION)
+		if sys.argv[2] == "ldacsource":
+			properties = dbus.Dictionary({ "UUID" : A2DP_SOURCE_UUID,
+							"Codec" : LDAC_CODEC,
+							"DelayReporting" : True,
+							"Capabilities" : LDAC_CAPABILITIES })
+			endpoint.default_configuration(LDAC_CONFIGURATION)
 		if sys.argv[2] == "mp3source":
 			properties = dbus.Dictionary({ "UUID" : A2DP_SOURCE_UUID,
 							"Codec" : MP3_CODEC,
