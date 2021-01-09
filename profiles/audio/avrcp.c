@@ -4631,21 +4631,33 @@ void avrcp_unregister_player(struct avrcp_player *player)
 	player_destroy(player);
 }
 
+struct set_volume_t {
+	struct avrcp *session;
+	uint8_t requested_volume;
+};
+
 static gboolean avrcp_handle_set_volume(struct avctp *conn, uint8_t code,
 					uint8_t subunit, uint8_t transaction,
 					uint8_t *operands, size_t operand_count,
 					void *user_data)
 {
-	struct avrcp *session = user_data;
+	struct set_volume_t *set_volume = user_data;
+	struct avrcp *session = set_volume->session;
 	struct avrcp_player *player = target_get_player(session);
 	struct avrcp_header *pdu = (void *) operands;
+	int8_t requested_volume = set_volume->requested_volume;
 	int8_t volume;
+
+	free(set_volume);
 
 	if (code == AVC_CTYPE_REJECTED || code == AVC_CTYPE_NOT_IMPLEMENTED ||
 								pdu == NULL)
 		return FALSE;
 
 	volume = pdu->params[0] & 0x7F;
+
+	DBG("Volume set to %d results in %d",
+			requested_volume, volume);
 
 	/* Always attempt to update the transport volume */
 	media_transport_update_device_volume(session->dev, volume);
@@ -4715,6 +4727,7 @@ int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
 	struct avrcp *session;
 	uint8_t buf[AVRCP_HEADER_LENGTH + 1];
 	struct avrcp_header *pdu = (void *) buf;
+	struct set_volume_t *set_volume;
 
 	if (volume < 0)
 		return -EINVAL;
@@ -4762,10 +4775,14 @@ int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
 	pdu->params[0] = volume;
 	pdu->params_len = cpu_to_be16(1);
 
+	set_volume = malloc(sizeof(struct set_volume_t));
+	set_volume->session = session;
+	set_volume->requested_volume = volume;
+
 	return avctp_send_vendordep_req(session->conn,
 					AVC_CTYPE_CONTROL, AVC_SUBUNIT_PANEL,
 					buf, sizeof(buf),
-					avrcp_handle_set_volume, session);
+					avrcp_handle_set_volume, set_volume);
 }
 
 struct avrcp_player *avrcp_get_target_player_by_device(struct btd_device *dev)
