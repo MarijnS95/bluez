@@ -561,7 +561,7 @@ Methods		void SetConfiguration(object transport, dict properties)
 			Set configuration for the transport.
 
 			For client role transport must be set with a server
-			endpoint oject which will be configured and the
+			endpoint object which will be configured and the
 			properties must contain the following properties:
 
 				array{byte} Capabilities
@@ -576,7 +576,7 @@ Methods		void SetConfiguration(object transport, dict properties)
 
 			Note: There is no need to cache the selected
 			configuration since on success the configuration is
-			send back as parameter of SetConfiguration.
+			sent back as parameter of SetConfiguration.
 
 		void ClearConfiguration(object transport)
 
