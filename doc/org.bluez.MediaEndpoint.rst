@@ -41,7 +41,7 @@ void SetConfiguration(object transport, dict properties)
 
 	For client role transport must be set with a server endpoint
 	object which will be configured and the properties must
-	contain the following properties:
+	contain the following entries:
 
 	:array{byte} Capabilities [Mandatory]:
 
@@ -64,7 +64,7 @@ array{byte} SelectConfiguration(array{byte} capabilities)
 	**org.bluez.MediaTransport(5)** for possible values.
 
 	Note: There is no need to cache the selected configuration since on
-	success the configuration is send back as parameter of SetConfiguration.
+	success the configuration is sent back as parameter of SetConfiguration.
 
 dict SelectProperties(dict capabilities)
 ````````````````````````````````````````
@@ -102,7 +102,7 @@ dict SelectProperties(dict capabilities)
 	See `SetConfiguration`_ for their possible values.
 
 	Note: There is no need to cache the selected properties since on
-	success the configuration is send back as parameter of SetConfiguration.
+	success the configuration is sent back as parameter of SetConfiguration.
 
 void ClearConfiguration(object transport)
 `````````````````````````````````````````
