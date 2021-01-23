@@ -1159,7 +1159,7 @@ static void connection_lost(struct avdtp *session, int err)
 	session = avdtp_ref(session);
 
 	ba2str(device_get_address(session->device), address);
-	DBG("Disconnected from %s", address);
+	DBG("Disconnected from %s %s", address, strerror(err));
 
 	g_slist_foreach(session->streams, (GFunc) release_stream, session);
 	session->streams = NULL;

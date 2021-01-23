@@ -1640,6 +1640,8 @@ static uint8_t avrcp_handle_register_notification(struct avrcp *session,
 	if (len != 5)
 		goto err;
 
+	DBG("Requesting registration for event %#x", pdu->params[0]);
+
 	/* Check if event is supported otherwise reject */
 	if (!(session->supported_events & (1 << pdu->params[0])))
 		goto err;
@@ -1673,6 +1675,7 @@ static uint8_t avrcp_handle_register_notification(struct avrcp *session,
 		break;
 	case AVRCP_EVENT_VOLUME_CHANGED:
 		volume = media_transport_get_device_volume(dev);
+		DBG("Register for volume with initial value %d", volume);
 		if (volume < 0)
 			goto err;
 
@@ -1787,6 +1790,7 @@ static uint8_t avrcp_handle_set_absolute_volume(struct avrcp *session,
 	}
 
 	volume = pdu->params[0] & 0x7F;
+	DBG("volume=%d", volume);
 
 	media_transport_update_device_volume(session->dev, volume);
 
@@ -3790,6 +3794,8 @@ static void avrcp_volume_changed(struct avrcp *session,
 
 	volume = pdu->params[1] & 0x7F;
 
+	DBG("Remote reports volume %d", volume);
+
 	/* Always attempt to update the transport volume */
 	media_transport_update_device_volume(session->dev, volume);
 
@@ -4053,6 +4059,8 @@ static gboolean avrcp_get_capabilities_resp(struct avctp *conn, uint8_t code,
 
 		events |= (1 << event);
 
+		DBG("Remote reports supported event %#x", event);
+
 		switch (event) {
 		case AVRCP_EVENT_STATUS_CHANGED:
 		case AVRCP_EVENT_TRACK_CHANGED:
@@ -4068,6 +4076,7 @@ static gboolean avrcp_get_capabilities_resp(struct avctp *conn, uint8_t code,
 				break;
 			/* fall through */
 		case AVRCP_EVENT_VOLUME_CHANGED:
+			DBG("Registering event %#x", event);
 			avrcp_register_notification(session, event);
 			break;
 		}
@@ -4157,6 +4166,7 @@ static struct avrcp_data *data_init(struct avrcp *session, const char *uuid)
 	data = g_new0(struct avrcp_data, 1);
 
 	rec = btd_device_get_record(session->dev, uuid);
+	sdp_record_print(rec);
 	if (rec == NULL)
 		return data;
 
@@ -4166,6 +4176,31 @@ static struct avrcp_data *data_init(struct avrcp *session, const char *uuid)
 	}
 
 	sdp_get_int_attr(rec, SDP_ATTR_SUPPORTED_FEATURES, &data->features);
+	error("Supported features %#x", data->features);
+	if (data->features & AVRCP_FEATURE_CATEGORY_1)
+		error("Supports AVRCP_FEATURE_CATEGORY_1");
+	if (data->features & AVRCP_FEATURE_CATEGORY_2)
+		error("Supports AVRCP_FEATURE_CATEGORY_2");
+	if (data->features & AVRCP_FEATURE_CATEGORY_3)
+		error("Supports AVRCP_FEATURE_CATEGORY_3");
+	if (data->features & AVRCP_FEATURE_CATEGORY_4)
+		error("Supports AVRCP_FEATURE_CATEGORY_4");
+	if (data->features & AVRCP_FEATURE_TG_PLAYER_SETTINGS)
+		error("Supports AVRCP_FEATURE_TG_PLAYER_SETTINGS");
+	if (data->features & AVRCP_FEATURE_TG_GROUP_NAVIGATION)
+		error("Supports AVRCP_FEATURE_TG_GROUP_NAVIGATION");
+	if (data->features & AVRCP_FEATURE_BROWSING)
+		error("Supports AVRCP_FEATURE_BROWSING");
+	if (data->features & AVRCP_FEATURE_TG_MULTIPLE_PLAYER)
+		error("Supports AVRCP_FEATURE_TG_MULTIPLE_PLAYER");
+	if (data->features & AVRCP_FEATURE_TG_COVERT_ART)
+		error("Supports AVRCP_FEATURE_TG_COVERT_ART");
+	if (data->features & AVRCP_FEATURE_CT_GET_IMAGE_PROP)
+		error("Supports AVRCP_FEATURE_CT_GET_IMAGE_PROP");
+	if (data->features & AVRCP_FEATURE_CT_GET_IMAGE)
+		error("Supports AVRCP_FEATURE_CT_GET_IMAGE");
+	if (data->features & AVRCP_FEATURE_CT_GET_THUMBNAIL)
+		error("Supports AVRCP_FEATURE_CT_GET_THUMBNAIL");
 	sdp_list_free(list, free);
 
 	if ((g_strcmp0(uuid, AVRCP_TARGET_UUID) != 0) ||
@@ -4630,8 +4665,10 @@ static int avrcp_event(struct avrcp *session, uint8_t id, const void *data)
 	int err;
 
 	/* Verify that the event is registered */
-	if (!(session->registered_events & (1 << id)))
+	if (!(session->registered_events & (1 << id))) {
+		error("Cannot send event %#x that was not registered", id);
 		return -ENOENT;
+	}
 
 	memset(buf, 0, sizeof(buf));
 
