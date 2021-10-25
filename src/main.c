@@ -164,6 +164,11 @@ static const char *avdtp_options[] = {
 	NULL
 };
 
+static const char *avrcp_options[] = {
+	"SetAbsoluteVolumeWithoutTarget",
+	NULL
+};
+
 static const char *advmon_options[] = {
 	"RSSISamplingPeriod",
 	NULL
@@ -180,6 +185,7 @@ static const struct group_table {
 	{ "GATT",	gatt_options },
 	{ "CSIS",	csip_options },
 	{ "AVDTP",	avdtp_options },
+	{ "AVRCP",	avrcp_options },
 	{ "AdvMon",	advmon_options },
 	{ }
 };
@@ -1139,6 +1145,13 @@ static void parse_avdtp(GKeyFile *config)
 	parse_avdtp_stream_mode(config);
 }
 
+static void parse_avrcp(GKeyFile *config)
+{
+	parse_config_bool(config, "AVRCP",
+			"SetAbsoluteVolumeWithoutTarget",
+			&btd_opts.avrcp.set_absolute_volume_without_target);
+}
+
 static void parse_advmon(GKeyFile *config)
 {
 	parse_config_u8(config, "AdvMon", "RSSISamplingPeriod",
@@ -1162,6 +1175,7 @@ static void parse_config(GKeyFile *config)
 	parse_gatt(config);
 	parse_csis(config);
 	parse_avdtp(config);
+	parse_avrcp(config);
 	parse_advmon(config);
 }
 

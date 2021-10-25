@@ -48,6 +48,7 @@
 #include "src/dbus-common.h"
 #include "src/shared/timeout.h"
 #include "src/shared/util.h"
+#include "src/btd.h"
 
 #include "avctp.h"
 #include "avrcp.h"
@@ -4585,9 +4586,14 @@ int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
 								&volume);
 	}
 
-	if (!session->controller && !avrcp_event_registered(session,
-					AVRCP_EVENT_VOLUME_CHANGED))
-		return -ENOTSUP;
+	if (btd_opts.avrcp.set_absolute_volume_without_target) {
+		if (!session->controller && !avrcp_event_registered(session,
+						AVRCP_EVENT_VOLUME_CHANGED))
+			return -ENOTSUP;
+	} else {
+		if (!session->controller || session->controller->version < 0x0104)
+			return -ENOTSUP;
+	}
 
 	memset(buf, 0, sizeof(buf));
 
