@@ -1775,6 +1775,16 @@ static uint8_t avrcp_handle_set_absolute_volume(struct avrcp *session,
 	if (len != 1)
 		goto err;
 
+	/**
+	 * The controller on the remote end is only allowed to call SetAbsoluteVolume
+	 * on our target if it's at least version 1.4 and a category-2 device.
+	 */
+	if (!session->target || session->target->version < 0x0104 ||
+			(btd_opts.avrcp.volume_category && !(session->target->features & AVRCP_FEATURE_CATEGORY_2))) {
+		error("Remote SetAbsoluteVolume rejected from non-category-2 peer");
+		goto err;
+	}
+
 	volume = pdu->params[0] & 0x7F;
 
 	media_transport_update_device_volume(session->dev, volume);
@@ -3767,6 +3777,16 @@ static void avrcp_volume_changed(struct avrcp *session,
 	struct avrcp_player *player = target_get_player(session);
 	int8_t volume;
 
+	/**
+	 * The target on the remote end is only allowed to reply to EVENT_VOLUME_CHANGED
+	 * on our controller if it's at least version 1.4 and a category-2 device.
+	 */
+	if (!session->controller || session->controller->version < 0x0104 ||
+			(btd_opts.avrcp.volume_category && !(session->controller->features & AVRCP_FEATURE_CATEGORY_2))) {
+		error("Remote EVENT_VOLUME_CHANGED rejected from non-category-2 peer");
+		return;
+	}
+
 	volume = pdu->params[1] & 0x7F;
 
 	/* Always attempt to update the transport volume */
@@ -4041,7 +4061,7 @@ static gboolean avrcp_get_capabilities_resp(struct avctp *conn, uint8_t code,
 		case AVRCP_EVENT_ADDRESSED_PLAYER_CHANGED:
 		case AVRCP_EVENT_UIDS_CHANGED:
 		case AVRCP_EVENT_AVAILABLE_PLAYERS_CHANGED:
-			/* These events above requires a player */
+			/* These events above require a player */
 			if (!session->controller ||
 						!session->controller->player)
 				break;
@@ -4245,10 +4265,13 @@ static void target_init(struct avrcp *session)
 	if (target->version < 0x0104)
 		return;
 
+	if (!btd_opts.avrcp.volume_category || target->features & AVRCP_FEATURE_CATEGORY_2)
+		session->supported_events |=
+				(1 << AVRCP_EVENT_VOLUME_CHANGED);
+
 	session->supported_events |=
 				(1 << AVRCP_EVENT_ADDRESSED_PLAYER_CHANGED) |
-				(1 << AVRCP_EVENT_AVAILABLE_PLAYERS_CHANGED) |
-				(1 << AVRCP_EVENT_VOLUME_CHANGED);
+				(1 << AVRCP_EVENT_AVAILABLE_PLAYERS_CHANGED);
 
 	/* Only check capabilities if controller is not supported */
 	if (session->controller == NULL)
@@ -4665,8 +4688,11 @@ int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
 		return -ENOTCONN;
 
 	if (notify) {
-		if (!session->target)
+		if (!session->target || session->target->version < 0x0104 ||
+				(btd_opts.avrcp.volume_category && !(session->target->features & AVRCP_FEATURE_CATEGORY_2))) {
+			error("Can't send EVENT_VOLUME_CHANGED to non-category-2 peer");
 			return -ENOTSUP;
+		}
 		return avrcp_event(session, AVRCP_EVENT_VOLUME_CHANGED,
 								&volume);
 	}
@@ -4680,8 +4706,11 @@ int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
 						AVRCP_EVENT_VOLUME_CHANGED))
 			return -ENOTSUP;
 	} else {
-		if (!session->controller || session->controller->version < 0x0104)
+		if (!session->controller || session->controller->version < 0x0104 ||
+				(btd_opts.avrcp.volume_category && !(session->controller->features & AVRCP_FEATURE_CATEGORY_2))) {
+			error("Can't send SetAbsoluteVolume to non-category-2 peer");
 			return -ENOTSUP;
+		}
 	}
 
 	memset(buf, 0, sizeof(buf));
