@@ -113,7 +113,7 @@ struct media_transport_ops {
 				transport_state_t state);
 	void *(*get_stream)(struct media_transport *transport);
 	int8_t (*get_volume)(struct media_transport *transport);
-	int (*set_volume)(struct media_transport *transport, int8_t level);
+	int (*set_volume)(struct media_transport *transport, int8_t level, DBusMessage *msg);
 	GDestroyNotify destroy;
 };
 
@@ -255,9 +255,7 @@ static void media_request_reply(struct media_request *req, int err)
 	if (!err)
 		reply = g_dbus_create_reply(req->msg, DBUS_TYPE_INVALID);
 	else
-		reply = g_dbus_create_error(req->msg,
-						ERROR_INTERFACE ".Failed",
-						"%s", strerror(err));
+		reply = btd_error_failed(req->msg, strerror(err));
 
 	g_dbus_send_message(btd_get_dbus_connection(), reply);
 }
@@ -505,18 +503,18 @@ static int8_t transport_a2dp_get_volume(struct media_transport *transport)
 }
 
 static int transport_a2dp_src_set_volume(struct media_transport *transport,
-					int8_t level)
+					int8_t level, DBusMessage *msg)
 {
 	struct a2dp_transport *a2dp = transport->data;
 
 	if (a2dp->volume == level)
 		return 0;
 
-	return avrcp_set_volume(transport->device, level, false);
+	return avrcp_set_volume(transport->device, level, false, msg);
 }
 
 static int transport_a2dp_snk_set_volume(struct media_transport *transport,
-					int8_t level)
+					int8_t level, DBusMessage *msg)
 {
 	struct a2dp_transport *a2dp = transport->data;
 	bool notify;
@@ -533,7 +531,7 @@ static int transport_a2dp_snk_set_volume(struct media_transport *transport,
 						"Volume");
 	}
 
-	return avrcp_set_volume(transport->device, level, notify);
+	return avrcp_set_volume(transport->device, level, notify, msg);
 }
 
 static void media_owner_exit(DBusConnection *connection, void *user_data)
@@ -908,12 +906,12 @@ static gboolean get_volume(const GDBusPropertyTable *property,
 }
 
 static int media_transport_set_volume(struct media_transport *transport,
-					int8_t level)
+					int8_t level, DBusMessage *msg)
 {
 	DBG("Transport %s level %d", transport->path, level);
 
 	if (transport->ops && transport->ops->set_volume)
-		return transport->ops->set_volume(transport, level);
+		return transport->ops->set_volume(transport, level, msg);
 
 	return 0;
 }
@@ -941,7 +939,7 @@ static void set_volume(const GDBusPropertyTable *property,
 		return;
 	}
 
-	err = media_transport_set_volume(transport, arg);
+	err = media_transport_set_volume(transport, arg, NULL);
 	if (err) {
 		error("Unable to set volume: %s (%d)", strerror(-err), err);
 		g_dbus_pending_property_error(id,
@@ -952,6 +950,53 @@ static void set_volume(const GDBusPropertyTable *property,
 	}
 
 	g_dbus_pending_property_success(id);
+}
+
+static DBusMessage *set_volume_method(DBusConnection *conn, DBusMessage *msg,
+					void *data)
+{
+	struct media_transport *transport = data;
+	struct a2dp_transport *a2dp = transport->data;
+	DBusMessageIter iter;
+	uint16_t arg;
+	int8_t volume;
+	bool notify;
+	int err;
+
+	if (!dbus_message_iter_init(msg, &iter))
+		return btd_error_invalid_args(msg);
+
+	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_UINT16)
+		return btd_error_invalid_args_str(msg, "Expected UINT16");
+
+	dbus_message_iter_get_basic(&iter, &arg);
+	if (arg > INT8_MAX)
+		return btd_error_invalid_args_str(msg,
+				"Volume must not be larger than 127");
+
+	volume = (int8_t)arg;
+	if (a2dp->volume == volume)
+		goto reply_volume;
+
+	notify = a2dp->watch ? true : false;
+	if (notify) {
+		err = media_transport_set_volume(transport, arg, NULL);
+		if (err)
+			return btd_error_failed(msg, strerror(err));
+
+		goto reply_volume;
+	}
+
+	err = media_transport_set_volume(transport, arg, msg);
+	if (err)
+		return btd_error_failed(msg, strerror(err));
+
+	// Reply is sent asynchronously
+	return NULL;
+
+reply_volume:
+	return g_dbus_create_reply(msg, DBUS_TYPE_UINT16, &arg,
+					DBUS_TYPE_INVALID);
 }
 
 static gboolean endpoint_exists(const GDBusPropertyTable *property, void *data)
@@ -994,6 +1039,10 @@ static const GDBusMethodTable transport_methods[] = {
 			NULL, NULL, select_transport) },
 	{ GDBUS_ASYNC_METHOD("Unselect",
 			NULL, NULL, unselect_transport) },
+	{ GDBUS_ASYNC_METHOD("SetVolume",
+			GDBUS_ARGS({ "in_volume", "q" }),
+			GDBUS_ARGS({ "out_volume", "q" }),
+			set_volume_method) },
 	{ },
 };
 
@@ -1984,7 +2033,7 @@ static int8_t transport_asha_get_volume(struct media_transport *transport)
 }
 
 static int transport_asha_set_volume(struct media_transport *transport,
-								int8_t volume)
+								int8_t volume, DBusMessage *msg)
 {
 	struct bt_asha_device *asha_dev = transport->data;
 	int scaled_volume;
@@ -1992,7 +2041,17 @@ static int transport_asha_set_volume(struct media_transport *transport,
 	/* Convert 0-127 to -128-0 */
 	scaled_volume = ((((int) volume) * 128) / 127) - 128;
 
-	return bt_asha_device_set_volume(asha_dev, scaled_volume) ? 0 : -EIO;
+	bool success = bt_asha_device_set_volume(asha_dev, scaled_volume);
+
+	if (success) {
+		uint16_t volume_u16 = volume;
+		g_dbus_send_reply(btd_get_dbus_connection(), msg,
+				DBUS_TYPE_UINT16, &volume_u16, DBUS_TYPE_INVALID);
+		return 0;
+	} else {
+		btd_error_failed(msg, "EIO?");
+		return -EIO;
+	}
 }
 
 static void *transport_asha_init(struct media_transport *transport, void *data)

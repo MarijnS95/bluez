@@ -4634,6 +4634,7 @@ void avrcp_unregister_player(struct avrcp_player *player)
 struct set_volume_t {
 	struct avrcp *session;
 	uint8_t requested_volume;
+	DBusMessage *msg;
 };
 
 static gboolean avrcp_handle_set_volume(struct avctp *conn, uint8_t code,
@@ -4643,18 +4644,22 @@ static gboolean avrcp_handle_set_volume(struct avctp *conn, uint8_t code,
 {
 	struct set_volume_t *set_volume = user_data;
 	struct avrcp *session = set_volume->session;
+	int8_t requested_volume = set_volume->requested_volume;
+	DBusMessage *msg = set_volume->msg;
 	struct avrcp_player *player = target_get_player(session);
 	struct avrcp_header *pdu = (void *) operands;
-	int8_t requested_volume = set_volume->requested_volume;
 	int8_t volume;
+	uint16_t volume_u16;
+	gboolean ret;
 
 	free(set_volume);
 
 	if (code == AVC_CTYPE_REJECTED || code == AVC_CTYPE_NOT_IMPLEMENTED ||
 								pdu == NULL)
-		return FALSE;
+		goto exit;
 
 	volume = pdu->params[0] & 0x7F;
+	volume_u16 = (uint16_t)volume;
 
 	DBG("Volume set to %d results in %d",
 			requested_volume, volume);
@@ -4664,6 +4669,18 @@ static gboolean avrcp_handle_set_volume(struct avctp *conn, uint8_t code,
 
 	if (player != NULL)
 		player->cb->set_volume(volume, session->dev, player->user_data);
+
+	if (msg != NULL) {
+		ret = g_dbus_send_reply(btd_get_dbus_connection(), msg,
+					DBUS_TYPE_UINT16, &volume_u16,
+					DBUS_TYPE_INVALID);
+		if (ret == FALSE)
+			error("Failed to send volume reply");
+	}
+
+exit:
+	if (msg)
+		dbus_message_unref(msg);
 
 	return FALSE;
 }
@@ -4721,7 +4738,8 @@ static bool avrcp_event_registered(struct avrcp *session, uint8_t event)
 	return session->registered_events & (1 << event);
 }
 
-int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
+int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify,
+			DBusMessage *msg)
 {
 	struct avrcp_server *server;
 	struct avrcp *session;
@@ -4778,6 +4796,10 @@ int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
 	set_volume = malloc(sizeof(struct set_volume_t));
 	set_volume->session = session;
 	set_volume->requested_volume = volume;
+	if (msg)
+		set_volume->msg = dbus_message_ref(msg);
+	else
+		set_volume->msg = NULL;
 
 	return avctp_send_vendordep_req(session->conn,
 					AVC_CTYPE_CONTROL, AVC_SUBUNIT_PANEL,

@@ -78,6 +78,14 @@ void Unselect()
 
 	:org.bluez.Error.NotAuthorized:
 
+uint16 SetVolume(uint16)
+````````````````````````
+
+	Sets AVRCP absolute volume. Returns possibly-rounded volume as determined by
+	the peer.
+
+	Possible Values: 0-127
+
 Properties
 ----------
 
