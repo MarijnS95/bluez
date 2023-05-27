@@ -107,6 +107,7 @@ struct btd_avdtp_opts {
 struct btd_avrcp_opts {
 	bool		volume_without_target;
 	bool		volume_category;
+	bool		volume_version;
 };
 
 struct btd_advmon_opts {

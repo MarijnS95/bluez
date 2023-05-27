@@ -168,6 +168,7 @@ static const char *avdtp_options[] = {
 static const char *avrcp_options[] = {
 	"VolumeWithoutTarget",
 	"VolumeCategory",
+	"VolumeVersion",
 	NULL
 };
 
@@ -1155,6 +1156,9 @@ static void parse_avrcp(GKeyFile *config)
 	parse_config_bool(config, "AVRCP",
 		"VolumeCategory",
 		&btd_opts.avrcp.volume_category);
+	parse_config_bool(config, "AVRCP",
+		"VolumeVersion",
+		&btd_opts.avrcp.volume_version);
 }
 
 static void parse_advmon(GKeyFile *config)
@@ -1225,6 +1229,7 @@ static void init_defaults(void)
 
 	btd_opts.avrcp.volume_without_target = false;
 	btd_opts.avrcp.volume_category = true;
+	btd_opts.avrcp.volume_version = false;
 
 	btd_opts.advmon.rssi_sampling_period = 0xFF;
 	btd_opts.csis.encrypt = true;

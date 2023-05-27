@@ -1779,9 +1779,10 @@ static uint8_t avrcp_handle_set_absolute_volume(struct avrcp *session,
 	 * The controller on the remote end is only allowed to call SetAbsoluteVolume
 	 * on our target if it's at least version 1.4 and a category-2 device.
 	 */
-	if (!session->target || session->target->version < 0x0104 ||
+	if (!session->target ||
+			(btd_opts.avrcp.volume_version && session->target->version < 0x0104) ||
 			(btd_opts.avrcp.volume_category && !(session->target->features & AVRCP_FEATURE_CATEGORY_2))) {
-		error("Remote SetAbsoluteVolume rejected from non-category-2 peer");
+		error("Remote SetAbsoluteVolume rejected from non-category-2 or non-AVRCP-1.4 peer");
 		goto err;
 	}
 
@@ -4262,12 +4263,14 @@ static void target_init(struct avrcp *session)
 				(1 << AVRCP_EVENT_TRACK_REACHED_END) |
 				(1 << AVRCP_EVENT_SETTINGS_CHANGED);
 
-	if (target->version < 0x0104)
-		return;
-
-	if (!btd_opts.avrcp.volume_category || target->features & AVRCP_FEATURE_CATEGORY_2)
+	/* Remote device supports receiving volume notifications */
+	if ((!btd_opts.avrcp.volume_version || target->version >= 0x0104) &&
+			(!btd_opts.avrcp.volume_category || target->features & AVRCP_FEATURE_CATEGORY_2))
 		session->supported_events |=
 				(1 << AVRCP_EVENT_VOLUME_CHANGED);
+
+	if (target->version < 0x0104)
+		return;
 
 	session->supported_events |=
 				(1 << AVRCP_EVENT_ADDRESSED_PLAYER_CHANGED) |
@@ -4688,9 +4691,10 @@ int avrcp_set_volume(struct btd_device *dev, int8_t volume, bool notify)
 		return -ENOTCONN;
 
 	if (notify) {
-		if (!session->target || session->target->version < 0x0104 ||
+		if (!session->target ||
+				(btd_opts.avrcp.volume_version && session->target->version < 0x0104) ||
 				(btd_opts.avrcp.volume_category && !(session->target->features & AVRCP_FEATURE_CATEGORY_2))) {
-			error("Can't send EVENT_VOLUME_CHANGED to non-category-2 peer");
+			error("Can't send EVENT_VOLUME_CHANGED to non-category-2 or non-AVRCP-1.4 peer");
 			return -ENOTSUP;
 		}
 		return avrcp_event(session, AVRCP_EVENT_VOLUME_CHANGED,
