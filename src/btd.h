@@ -106,6 +106,7 @@ struct btd_avdtp_opts {
 
 struct btd_avrcp_opts {
 	bool		set_absolute_volume_without_target;
+	bool		allow_volume_changed_on_pre_1_4_ct;
 };
 
 struct btd_advmon_opts {

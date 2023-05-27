@@ -166,6 +166,7 @@ static const char *avdtp_options[] = {
 
 static const char *avrcp_options[] = {
 	"SetAbsoluteVolumeWithoutTarget",
+	"AllowVolumeChangedOnPre1_4Controller",
 	NULL
 };
 
@@ -1150,6 +1151,9 @@ static void parse_avrcp(GKeyFile *config)
 	parse_config_bool(config, "AVRCP",
 			"SetAbsoluteVolumeWithoutTarget",
 			&btd_opts.avrcp.set_absolute_volume_without_target);
+	parse_config_bool(config, "AVRCP",
+			"AllowVolumeChangedOnPre1_4Controller",
+			&btd_opts.avrcp.allow_volume_changed_on_pre_1_4_ct);
 }
 
 static void parse_advmon(GKeyFile *config)
